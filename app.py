@@ -1,8 +1,8 @@
-from datetime import UTC, datetime, date
+from datetime import date, timedelta
 
 import streamlit as st
 
-from src.analyzer import calculate_moving_average, decompose_time_series
+from src.analyzer import calculate_moving_average, decompose_time_series, predict_next_day
 from src.data_fetcher import fetch_stock_data
 from src.utils import load_symbols, save_symbols
 from src.visualizer import plot_time_series, plot_decomposition
@@ -28,31 +28,47 @@ with st.sidebar:
             save_symbols(symbols)
             st.rerun()
 
-st.title("Finansal Zaman Serisi Analizi")
-selected_symbol = st.selectbox("Analiz Edilecek Sembol:", symbols)
+st.title("Finansal Zaman Serisi Analizi ve Gelecek Tahmini")
 
-col1, col2, col3 = st.columns((2, 2, 1))
-start_date = col1.date_input("Başlangıç Tarihi:", date(2020, 1, 1))
-end_date = col2.date_input("Bitiş Tarihi:", date.today())
-if col3.button("Analizi Başlat", width='stretch'):
-    if selected_symbol:
-        data = fetch_stock_data(selected_symbol, str(start_date), str(end_date))
-        if not data.empty:
-            st.subheader(f"{selected_symbol} Fiyat ve Hareketli Ortalama (20 Gün)")
-            data_with_sma = calculate_moving_average(data)
-            fig_ts = plot_time_series(data_with_sma, selected_symbol)
-            c1, c2 = st.columns(2)
-            c1.plotly_chart(fig_ts, width='stretch')
-            c2.dataframe(data_with_sma, width='stretch')
+tab1, tab2 = st.tabs(["Seçilen Sembol","Tüm Semboller"])
+with tab1:
+    selected_symbol = st.selectbox("Analiz Edilecek Sembol:", symbols)
 
-            st.subheader(f"{selected_symbol} Zaman Serisi Ayrıştırması")
-            decomposition = decompose_time_series(data_with_sma)
-            if decomposition:
-                fig_decomp = plot_decomposition(decomposition)
-                st.plotly_chart(fig_decomp,width='stretch')
+    col1, col2, col3 = st.columns((2, 2, 1))
+    start_date = col1.date_input("Başlangıç Tarihi:", date(2025, 1, 1))
+    end_date = col2.date_input("Bitiş Tarihi:", date.today())
+    if col3.button("Analizi Başlat", width='stretch'):
+        if selected_symbol:
+            data = fetch_stock_data(selected_symbol, str(start_date), str(end_date + timedelta(days=1)))
+            if not data.empty:
+                last_price = data['Close'].iloc[-1]
+                prediction = predict_next_day(data)
+                if prediction is not None:
+                    delta = prediction - last_price
+                    delta_perc = delta * 100 / last_price
+                    st.metric(label="Tahmini Kapanış Fiyatı", value=f"{prediction:.2f}",
+                              delta=f"%{delta_perc:.2f}")
+                else:
+                    st.warning("Tahmin yapılamadı. Yeterli veri olmayabilir.")
+
+                st.subheader(f"{selected_symbol} Fiyat ve Hareketli Ortalama (20 Gün)")
+                data_with_sma = calculate_moving_average(data)
+                fig_ts = plot_time_series(data_with_sma, selected_symbol)
+                c1, c2 = st.columns(2)
+                c1.plotly_chart(fig_ts, width='stretch')
+                c2.dataframe(data_with_sma, width='stretch')
+
+                st.subheader(f"{selected_symbol} Zaman Serisi Ayrıştırması")
+                decomposition = decompose_time_series(data_with_sma)
+                if decomposition:
+                    fig_decomp = plot_decomposition(decomposition)
+                    st.plotly_chart(fig_decomp, width='stretch')
+                else:
+                    st.warning("Ayrıştırma için yeterli veri noktası bulunamadı.")
             else:
-                st.warning("Ayrıştırma için yeterli veri noktası bulunamadı.")
+                st.error("Veri çekilemedi, sembol adını veya tarih aralığını kontrol edin.")
         else:
-            st.error("Veri çekilemedi, sembol adını veya tarih aralığını kontrol edin.")
-    else:
-        st.warning("Analiz için önce bir sembol eklemelisiniz!")
+            st.warning("Analiz için önce bir sembol eklemelisiniz!")
+
+with tab2:
+    pass
