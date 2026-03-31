@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 import streamlit as st
+from scipy.constants import year
 
 from src.analyzer import calculate_moving_average, decompose_time_series, predict_next_day
 from src.data_fetcher import fetch_stock_data
@@ -30,14 +31,14 @@ with st.sidebar:
 
 st.title("Finansal Zaman Serisi Analizi ve Gelecek Tahmini")
 
-tab1, tab2 = st.tabs(["Seçilen Sembol","Tüm Semboller"])
+tab1, tab2 = st.tabs(["Seçilen Sembol", "Tüm Semboller"])
 with tab1:
     selected_symbol = st.selectbox("Analiz Edilecek Sembol:", symbols)
 
     col1, col2, col3 = st.columns((2, 2, 1))
-    start_date = col1.date_input("Başlangıç Tarihi:", date(2025, 1, 1))
-    end_date = col2.date_input("Bitiş Tarihi:", date.today())
-    if col3.button("Analizi Başlat", width='stretch'):
+    start_date = col1.date_input("Başlangıç Tarihi:", date.today() - timedelta(days=2*365), key='start_1')
+    end_date = col2.date_input("Bitiş Tarihi:", date.today(), key='end_1')
+    if col3.button("Analizi Başlat", width='stretch', key='analyze_1'):
         if selected_symbol:
             data = fetch_stock_data(selected_symbol, str(start_date), str(end_date + timedelta(days=1)))
             if not data.empty:
@@ -71,4 +72,28 @@ with tab1:
             st.warning("Analiz için önce bir sembol eklemelisiniz!")
 
 with tab2:
-    pass
+    c1, c2, c3 = st.columns((2, 2, 1))
+    start_date = c1.date_input("Başlangıç Tarihi:",  date.today() - timedelta(days=2*365), key='start_2')
+    end_date = c2.date_input("Bitiş Tarihi:", date.today(), key='end_2')
+    if c3.button("Analizi Başlat", width='stretch', key='analyze_2'):
+        cols = st.columns(3)
+        for i, symbol in enumerate(symbols):
+            with cols[i % 3]:
+                d = fetch_stock_data(symbol, str(start_date), str(end_date + timedelta(days=1)))
+                if not d.empty:
+                    last = d['Close'].iloc[-1]
+                    pred = predict_next_day(d)
+                    if pred is not None:
+                        delta = pred - last
+                        delta_perc = delta * 100 / last
+                        print(delta, delta_perc, pred, last)
+                        st.metric(
+                            label=symbol,
+                            value=f"{pred:.2f}",
+                            delta=f"%{delta_perc:.2f} - ${delta:.2f}",
+                            format="dollar"
+                        )
+                    else:
+                        st.warning("Tahmin yapılamadı. Yeterli veri olmayabilir.")
+                else:
+                    st.error("Veri çekilemedi, sembol adını veya tarih aralığını kontrol edin.")
