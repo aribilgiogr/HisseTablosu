@@ -32,7 +32,17 @@ def predict_next_day(df: pd.DataFrame):
 
     try:
         ts_data = df['Close'].dropna()
-        model = auto_arima(ts_data, seasonal=False, stepwise=True, suppress_warnings=True, error_action='ignore')
+        model = auto_arima(
+            ts_data,
+            seasonal=False,
+            stepwise=False,
+            approximation=False,
+            information_criterion='aic',
+            max_p=5,
+            max_q=5,
+            suppress_warnings=True,
+            error_action='ignore'
+        )
         forecast = model.predict(n_periods=1)
         return forecast.iloc[0]
     except Exception as ex:
